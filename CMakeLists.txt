@@ -10,6 +10,11 @@ include(${TRUSSC_DIR}/cmake/trussc_app.cmake)
 
 trussc_app()
 
+# Bundle ID override for notarization/distribution
+set_target_properties(${PROJECT_NAME} PROPERTIES
+    MACOSX_BUNDLE_GUI_IDENTIFIER "com.annolab.GvEncoder"
+)
+
 # ofxExtremeGpuVideo dependencies (squish + lz4, headers only for GV format)
 set(OFX_EXTREME_GPU_VIDEO_DIR "${CMAKE_CURRENT_SOURCE_DIR}/third_party/ofxExtremeGpuVideo"
     CACHE PATH "Path to ofxExtremeGpuVideo addon")
