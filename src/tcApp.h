@@ -77,6 +77,8 @@ private:
     bool prepareInput();
     bool prepareVideoIntermediate();
     bool buildImageList(const std::filesystem::path& directory);
+    bool isImageExtension(const std::filesystem::path& path) const;
+    std::vector<std::filesystem::path> collectImageDirectories(const std::filesystem::path& root) const;
     std::filesystem::path resolveOutputPath() const;
     float detectFpsFromMeta(const std::filesystem::path& directory) const;
     std::string runCommandCapture(const std::string& cmd, int& exitCode) const;

@@ -7,6 +7,7 @@
 #include <fstream>
 #include <iostream>
 #include <regex>
+#include <set>
 #include <sstream>
 #include <system_error>
 #include <vector>
@@ -142,6 +143,13 @@ void tcApp::filesDropped(const vector<string>& files) {
     }
     for (const auto& file : files) {
         fs::path path = file;
+        if (fs::exists(path) && fs::is_directory(path)) {
+            auto imageDirs = collectImageDirectories(path);
+            for (const auto& dir : imageDirs) {
+                enqueueInputPath(dir);
+            }
+            continue;
+        }
         string ext = path.extension().string();
         std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
         if (ext == ".gv") {
@@ -619,9 +627,7 @@ bool tcApp::buildImageList(const fs::path& directory) {
         if (!name.empty() && name[0] == '.') {
             continue;
         }
-        string ext = path.extension().string();
-        std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
-        if (ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".tif" || ext == ".tiff") {
+        if (isImageExtension(path)) {
             imagePaths_.push_back(path);
         }
     }
@@ -632,6 +638,38 @@ bool tcApp::buildImageList(const fs::path& directory) {
         return false;
     }
     return true;
+}
+
+bool tcApp::isImageExtension(const fs::path& path) const {
+    string ext = path.extension().string();
+    std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
+    return ext == ".png" || ext == ".jpg" || ext == ".jpeg" || ext == ".tif" || ext == ".tiff";
+}
+
+std::vector<fs::path> tcApp::collectImageDirectories(const fs::path& root) const {
+    std::vector<fs::path> results;
+    if (!fs::exists(root) || !fs::is_directory(root)) {
+        return results;
+    }
+
+    std::set<fs::path> uniqueDirs;
+    for (auto& entry : fs::recursive_directory_iterator(root)) {
+        if (!entry.is_regular_file()) {
+            continue;
+        }
+        auto path = entry.path();
+        auto name = path.filename().string();
+        if (!name.empty() && name[0] == '.') {
+            continue;
+        }
+        if (isImageExtension(path)) {
+            uniqueDirs.insert(path.parent_path());
+        }
+    }
+
+    results.assign(uniqueDirs.begin(), uniqueDirs.end());
+    std::sort(results.begin(), results.end());
+    return results;
 }
 
 fs::path tcApp::resolveOutputPath() const {
