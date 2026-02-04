@@ -69,7 +69,7 @@ private:
     void resetState();
     void clearInput();
     bool setInputPath(const std::filesystem::path& path);
-    bool enqueueInputPath(const std::filesystem::path& path);
+    bool enqueueInputPath(const std::filesystem::path& path, const std::string& displayLabel = "");
     bool dequeueNextInput();
     bool startConversion();
     void processBatch();
@@ -107,6 +107,7 @@ private:
     InputKind inputKind_ = InputKind::None;
     std::filesystem::path inputPath_;
     std::vector<std::filesystem::path> inputQueue_;
+    std::vector<std::string> inputQueueLabels_;
     std::string inputPathBuffer_;
     std::filesystem::path intermediateDir_;
     std::vector<std::filesystem::path> imagePaths_;

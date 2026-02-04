@@ -146,7 +146,13 @@ void tcApp::filesDropped(const vector<string>& files) {
         if (fs::exists(path) && fs::is_directory(path)) {
             auto imageDirs = collectImageDirectories(path);
             for (const auto& dir : imageDirs) {
-                enqueueInputPath(dir);
+                std::error_code ec;
+                auto rel = fs::relative(dir, path, ec);
+                std::string label = ec ? dir.filename().string() : rel.string();
+                if (label.empty()) {
+                    label = ".";
+                }
+                enqueueInputPath(dir, label);
             }
             continue;
         }
@@ -156,7 +162,7 @@ void tcApp::filesDropped(const vector<string>& files) {
             loadGvFile(path);
             continue;
         }
-        enqueueInputPath(path);
+        enqueueInputPath(path, path.filename().string());
     }
 }
 
@@ -249,6 +255,7 @@ void tcApp::resetState() {
     inputKind_ = InputKind::None;
     inputPath_.clear();
     inputQueue_.clear();
+    inputQueueLabels_.clear();
     inputPathBuffer_.clear();
     intermediateDir_.clear();
     imagePaths_.clear();
@@ -269,6 +276,7 @@ void tcApp::clearInput() {
     inputKind_ = InputKind::None;
     inputPath_.clear();
     inputQueue_.clear();
+    inputQueueLabels_.clear();
     inputPathBuffer_.clear();
     intermediateDir_.clear();
     imagePaths_.clear();
@@ -294,14 +302,16 @@ bool tcApp::setInputPath(const fs::path& path) {
     return true;
 }
 
-bool tcApp::enqueueInputPath(const fs::path& path) {
+bool tcApp::enqueueInputPath(const fs::path& path, const std::string& displayLabel) {
     if (!fs::exists(path)) {
         lastError_ = "Input path not found";
         return false;
     }
     inputQueue_.push_back(path);
-    if (inputKind_ == InputKind::None && !isConverting_) {
-        return dequeueNextInput();
+    if (displayLabel.empty()) {
+        inputQueueLabels_.push_back(path.filename().string());
+    } else {
+        inputQueueLabels_.push_back(displayLabel);
     }
     return true;
 }
@@ -312,6 +322,9 @@ bool tcApp::dequeueNextInput() {
     }
     fs::path next = inputQueue_.front();
     inputQueue_.erase(inputQueue_.begin());
+    if (!inputQueueLabels_.empty()) {
+        inputQueueLabels_.erase(inputQueueLabels_.begin());
+    }
     return setInputPath(next);
 }
 
@@ -805,7 +818,21 @@ void tcApp::drawGui() {
     if (!inputQueue_.empty()) {
         ImGui::Text("Queue:");
         for (size_t i = 0; i < inputQueue_.size(); ++i) {
-            ImGui::Text("  %zu: %s", i + 1, inputQueue_[i].string().c_str());
+            ImGui::PushID(static_cast<int>(i));
+            std::string label = inputQueueLabels_.size() > i
+                ? inputQueueLabels_[i]
+                : inputQueue_[i].string();
+            ImGui::Text("  %zu: %s", i + 1, label.c_str());
+            ImGui::SameLine();
+            if (ImGui::SmallButton("Remove")) {
+                inputQueue_.erase(inputQueue_.begin() + static_cast<long>(i));
+                if (inputQueueLabels_.size() > i) {
+                    inputQueueLabels_.erase(inputQueueLabels_.begin() + static_cast<long>(i));
+                }
+                ImGui::PopID();
+                break;
+            }
+            ImGui::PopID();
         }
     } else {
         ImGui::Text("Queue: (empty)");
@@ -815,7 +842,12 @@ void tcApp::drawGui() {
         if (ImGui::Button("Select Input", ImVec2(160, 28))) {
             auto result = loadDialog("Select input (file or folder)", false);
             if (result.success) {
-                enqueueInputPath(result.filePath);
+                fs::path selected = result.filePath;
+                std::string label = selected.filename().string();
+                if (fs::exists(selected) && fs::is_directory(selected)) {
+                    label = ".";
+                }
+                enqueueInputPath(selected, label);
             }
         }
         if (ImGui::Button("Clear Input", ImVec2(140, 28))) {
