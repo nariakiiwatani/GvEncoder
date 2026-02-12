@@ -38,6 +38,8 @@ struct EncodeSettings {
     float fps = 30.0f;
     bool fpsSpecified = false;
     bool resizeEnabled = false;
+    bool resizeByScale = false;  // true: use resizeScale, false: use resizeWidth/Height
+    float resizeScale = 0.5f;   // e.g. 0.5 = 50%
     int resizeWidth = 0;
     int resizeHeight = 0;
     std::filesystem::path outputPath;

@@ -57,8 +57,11 @@ GvEncoder [options] <input>
 Examples:
 ```
 GvEncoder -c dxt5 -r 30 -s 1920x1080 -o /path/to/output.gv /path/to/video.mov
+GvEncoder -s 0.5 /path/to/sequence_folder   # 50% scale
 GvEncoder /path/to/sequence_folder
 ```
+
+Size (`-s`): use pixel size `WxH` (e.g. `1920x1080`) or scale factor (e.g. `0.5` for 50%).
 
 ### Run (GUI)
 Launch the app without arguments.

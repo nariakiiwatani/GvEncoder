@@ -52,7 +52,7 @@ static void printUsage() {
         << "  -o, --output <path>  Output .gv file or directory\n"
         << "  -c, --codec <name>   dxt1 | dxt3 | dxt5 (default: dxt1)\n"
         << "  -r, --fps <value>    Override FPS\n"
-        << "  -s, --size <WxH>     Resize output (e.g. 1920x1080)\n"
+        << "  -s, --size <WxH|scale>  Resize: pixel size (1920x1080) or scale (e.g. 0.5)\n"
         << "  --delete-source      Delete input after successful encode\n"
         << "  --gui                Force GUI even with args\n"
         << "  -h, --help           Show this help\n";
@@ -218,14 +218,27 @@ void tcApp::parseCommandLine() {
         if ((arg == "-s" || arg == "--size") && i + 1 < argc) {
             string sizeStr = argv[++i];
             auto xPos = sizeStr.find('x');
-            if (xPos == string::npos) {
-                lastError_ = "Invalid size format: " + sizeStr;
-                cliRequestedHelp_ = true;
-                continue;
+            if (xPos != string::npos) {
+                settings_.resizeWidth = std::stoi(sizeStr.substr(0, xPos));
+                settings_.resizeHeight = std::stoi(sizeStr.substr(xPos + 1));
+                settings_.resizeByScale = false;
+                settings_.resizeEnabled = true;
+            } else {
+                try {
+                    float scale = std::stof(sizeStr);
+                    if (scale <= 0.0f || scale > 100.0f) {
+                        lastError_ = "Scale must be in (0, 100]: " + sizeStr;
+                        cliRequestedHelp_ = true;
+                    } else {
+                        settings_.resizeScale = scale;
+                        settings_.resizeByScale = true;
+                        settings_.resizeEnabled = true;
+                    }
+                } catch (...) {
+                    lastError_ = "Invalid size format (use WxH or scale): " + sizeStr;
+                    cliRequestedHelp_ = true;
+                }
             }
-            settings_.resizeWidth = std::stoi(sizeStr.substr(0, xPos));
-            settings_.resizeHeight = std::stoi(sizeStr.substr(xPos + 1));
-            settings_.resizeEnabled = true;
             continue;
         }
         if (arg == "--delete-source") {
@@ -352,12 +365,26 @@ bool tcApp::startConversion() {
     }
 
     if (settings_.resizeEnabled) {
-        if (settings_.resizeWidth <= 0 || settings_.resizeHeight <= 0) {
-            lastError_ = "Invalid resize dimensions";
-            return false;
+        if (settings_.resizeByScale) {
+            Pixels first;
+            if (!first.load(imagePaths_.front())) {
+                lastError_ = "Failed to load first image";
+                return false;
+            }
+            int srcW = first.getWidth();
+            int srcH = first.getHeight();
+            settings_.resizeWidth = std::max(1, static_cast<int>(srcW * settings_.resizeScale));
+            settings_.resizeHeight = std::max(1, static_cast<int>(srcH * settings_.resizeScale));
+            width_ = static_cast<uint32_t>(settings_.resizeWidth);
+            height_ = static_cast<uint32_t>(settings_.resizeHeight);
+        } else {
+            if (settings_.resizeWidth <= 0 || settings_.resizeHeight <= 0) {
+                lastError_ = "Invalid resize dimensions";
+                return false;
+            }
+            width_ = static_cast<uint32_t>(settings_.resizeWidth);
+            height_ = static_cast<uint32_t>(settings_.resizeHeight);
         }
-        width_ = static_cast<uint32_t>(settings_.resizeWidth);
-        height_ = static_cast<uint32_t>(settings_.resizeHeight);
     } else {
         Pixels first;
         if (!first.load(imagePaths_.front())) {
@@ -605,7 +632,7 @@ bool tcApp::prepareVideoIntermediate() {
 
     std::ostringstream extractCmd;
     extractCmd << "ffmpeg -y -i " << quotePath(input) << " -an ";
-    if (settings_.resizeEnabled) {
+    if (settings_.resizeEnabled && !settings_.resizeByScale) {
         if (settings_.resizeWidth <= 0 || settings_.resizeHeight <= 0) {
             lastError_ = "Invalid resize dimensions";
             return false;
@@ -869,8 +896,14 @@ void tcApp::drawGui() {
 
     ImGui::Checkbox("Resize", &settings_.resizeEnabled);
     if (settings_.resizeEnabled) {
-        ImGui::InputInt("Width", &settings_.resizeWidth);
-        ImGui::InputInt("Height", &settings_.resizeHeight);
+        ImGui::Checkbox("By scale", &settings_.resizeByScale);
+        if (settings_.resizeByScale) {
+            ImGui::InputFloat("Scale", &settings_.resizeScale);
+            settings_.resizeScale = std::max(0.01f, std::min(100.0f, settings_.resizeScale));
+        } else {
+            ImGui::InputInt("Width", &settings_.resizeWidth);
+            ImGui::InputInt("Height", &settings_.resizeHeight);
+        }
     }
 
     ImGui::Separator();
@@ -1010,6 +1043,8 @@ void tcApp::loadGuiSettings() {
     settings_.fps = j.value("fps", settings_.fps);
     settings_.fpsSpecified = j.value("fpsSpecified", settings_.fpsSpecified);
     settings_.resizeEnabled = j.value("resizeEnabled", settings_.resizeEnabled);
+    settings_.resizeByScale = j.value("resizeByScale", settings_.resizeByScale);
+    settings_.resizeScale = j.value("resizeScale", settings_.resizeScale);
     settings_.resizeWidth = j.value("resizeWidth", settings_.resizeWidth);
     settings_.resizeHeight = j.value("resizeHeight", settings_.resizeHeight);
     settings_.deleteSource = j.value("deleteSource", settings_.deleteSource);
@@ -1034,6 +1069,8 @@ void tcApp::saveGuiSettings() const {
     j["fps"] = settings_.fps;
     j["fpsSpecified"] = settings_.fpsSpecified;
     j["resizeEnabled"] = settings_.resizeEnabled;
+    j["resizeByScale"] = settings_.resizeByScale;
+    j["resizeScale"] = settings_.resizeScale;
     j["resizeWidth"] = settings_.resizeWidth;
     j["resizeHeight"] = settings_.resizeHeight;
     j["deleteSource"] = settings_.deleteSource;
@@ -1062,7 +1099,11 @@ std::string tcApp::buildCommandLine() const {
         cmd << " -r " << settings_.fps;
     }
     if (settings_.resizeEnabled) {
-        cmd << " -s " << settings_.resizeWidth << "x" << settings_.resizeHeight;
+        if (settings_.resizeByScale) {
+            cmd << " -s " << settings_.resizeScale;
+        } else {
+            cmd << " -s " << settings_.resizeWidth << "x" << settings_.resizeHeight;
+        }
     }
     if (!settings_.outputPath.empty()) {
         cmd << " -o " << quotePath(settings_.outputPath);
