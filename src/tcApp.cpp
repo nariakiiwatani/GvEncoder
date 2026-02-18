@@ -58,12 +58,38 @@ static void printUsage() {
         << "  -h, --help           Show this help\n";
 }
 
+static void setupJapaneseFont() {
+    ImGuiIO& io = ImGui::GetIO();
+    io.Fonts->Clear();
+    io.Fonts->AddFontDefault();
+    // Merge Japanese glyphs so both Latin (default) and Japanese are available
+    ImFontConfig config;
+    config.MergeMode = true;
+    const char* jpFontPaths[] = {
+#ifdef __APPLE__
+        "/System/Library/Fonts/Supplemental/Arial Unicode.ttf",
+        "/System/Library/Fonts/Hiragino Sans GB.ttc",  // fallback: has CJK
+#endif
+#ifdef _WIN32
+        "C:\\Windows\\Fonts\\msgothic.ttc",
+        "C:\\Windows\\Fonts\\meiryo.ttc",
+#endif
+    };
+    for (const char* path : jpFontPaths) {
+        if (io.Fonts->AddFontFromFileTTF(path, 16.0f, &config, io.Fonts->GetGlyphRangesJapanese())) {
+            break;  // one success is enough when merging
+        }
+    }
+}
+
 void tcApp::setup() {
     headlessMode_ = headless::isActive();
     if (!headlessMode_) {
+        // Add Japanese font before imguiSetup() so the font atlas is built with it
+        ImGuiIO& io = ImGui::GetIO();
+        setupJapaneseFont();
         imguiSetup();
         imguiIniPath_ = getSettingsPath().replace_filename("imgui.ini").string();
-        ImGuiIO& io = ImGui::GetIO();
         io.IniFilename = imguiIniPath_.c_str();
         ImGui::LoadIniSettingsFromDisk(io.IniFilename);
     }
@@ -353,6 +379,12 @@ bool tcApp::startConversion() {
     if (inputKind_ == InputKind::None) {
         lastError_ = "Input not selected";
         return false;
+    }
+
+    if (settings_.skipIfUpToDate && isOutputUpToDate()) {
+        statusMessage_ = "Skipped (up to date)";
+        skipCurrentAndContinueQueue();
+        return true;
     }
 
     if (!prepareInput()) {
@@ -733,6 +765,67 @@ fs::path tcApp::resolveOutputPath() const {
     return output;
 }
 
+std::optional<fs::file_time_type> tcApp::getNewestSourceMtime() const {
+    if (inputPath_.empty()) {
+        return std::nullopt;
+    }
+    if (inputKind_ == InputKind::VideoFile) {
+        if (!fs::exists(inputPath_) || !fs::is_regular_file(inputPath_)) {
+            return std::nullopt;
+        }
+        return fs::last_write_time(inputPath_);
+    }
+    if (inputKind_ == InputKind::ImageSequence) {
+        if (!fs::exists(inputPath_) || !fs::is_directory(inputPath_)) {
+            return std::nullopt;
+        }
+        std::optional<fs::file_time_type> newest;
+        for (const auto& entry : fs::directory_iterator(inputPath_)) {
+            if (!entry.is_regular_file()) {
+                continue;
+            }
+            auto path = entry.path();
+            if (!isImageExtension(path)) {
+                continue;
+            }
+            auto t = fs::last_write_time(path);
+            if (!newest || t > *newest) {
+                newest = t;
+            }
+        }
+        return newest;
+    }
+    return std::nullopt;
+}
+
+bool tcApp::isOutputUpToDate() const {
+    fs::path out = resolveOutputPath();
+    if (out.empty() || !fs::exists(out) || !fs::is_regular_file(out)) {
+        return false;
+    }
+    auto gvTime = fs::last_write_time(out);
+    auto srcOpt = getNewestSourceMtime();
+    if (!srcOpt) {
+        return false;
+    }
+    return gvTime >= *srcOpt;
+}
+
+void tcApp::skipCurrentAndContinueQueue() {
+    inputKind_ = InputKind::None;
+    inputPath_.clear();
+    imagePaths_.clear();
+    if (!inputQueue_.empty()) {
+        if (dequeueNextInput()) {
+            startConversion();
+        }
+        return;
+    }
+    if (headlessMode_) {
+        requestExit();
+    }
+}
+
 float tcApp::detectFpsFromMeta(const fs::path& directory) const {
     fs::path metaPath = directory / "meta.txt";
     if (!fs::exists(metaPath)) {
@@ -920,10 +1013,12 @@ void tcApp::drawGui() {
     }
 
     ImGui::Checkbox("Delete Source After Encode", &settings_.deleteSource);
+    ImGui::Checkbox("Skip if image is not updated", &settings_.skipIfUpToDate);
 
     ImGui::Separator();
     if (!isConverting_) {
-        if (inputKind_ != InputKind::None) {
+        // Run は Current があるか、Queue に何かあるときに押せる（Queue があれば押下時に dequeue して開始）
+        if (inputKind_ != InputKind::None || !inputQueue_.empty()) {
             if (ImGui::Button("Run", ImVec2(160, 32))) {
                 startConversion();
             }
@@ -1048,6 +1143,7 @@ void tcApp::loadGuiSettings() {
     settings_.resizeWidth = j.value("resizeWidth", settings_.resizeWidth);
     settings_.resizeHeight = j.value("resizeHeight", settings_.resizeHeight);
     settings_.deleteSource = j.value("deleteSource", settings_.deleteSource);
+    settings_.skipIfUpToDate = j.value("skipIfUpToDate", settings_.skipIfUpToDate);
 
     string outputPath = j.value("outputPath", "");
     if (!outputPath.empty()) {
@@ -1074,6 +1170,7 @@ void tcApp::saveGuiSettings() const {
     j["resizeWidth"] = settings_.resizeWidth;
     j["resizeHeight"] = settings_.resizeHeight;
     j["deleteSource"] = settings_.deleteSource;
+    j["skipIfUpToDate"] = settings_.skipIfUpToDate;
     j["outputPath"] = settings_.outputPath.empty() ? "" : settings_.outputPath.string();
 
     std::ofstream ofs(path);

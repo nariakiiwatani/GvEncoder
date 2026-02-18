@@ -4,6 +4,7 @@
 
 #include <filesystem>
 #include <memory>
+#include <optional>
 #include <string>
 #include <vector>
 
@@ -44,6 +45,7 @@ struct EncodeSettings {
     int resizeHeight = 0;
     std::filesystem::path outputPath;
     bool deleteSource = false;
+    bool skipIfUpToDate = false;  // when on, skip folder if output .gv exists and is newer than all source images
 };
 
 class tcApp : public App {
@@ -82,6 +84,9 @@ private:
     bool isImageExtension(const std::filesystem::path& path) const;
     std::vector<std::filesystem::path> collectImageDirectories(const std::filesystem::path& root) const;
     std::filesystem::path resolveOutputPath() const;
+    std::optional<std::filesystem::file_time_type> getNewestSourceMtime() const;
+    bool isOutputUpToDate() const;
+    void skipCurrentAndContinueQueue();
     float detectFpsFromMeta(const std::filesystem::path& directory) const;
     std::string runCommandCapture(const std::string& cmd, int& exitCode) const;
     bool runCommand(const std::string& cmd, int& exitCode) const;
