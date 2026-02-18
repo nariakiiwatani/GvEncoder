@@ -60,15 +60,14 @@ static void printUsage() {
 
 static void setupJapaneseFont() {
     ImGuiIO& io = ImGui::GetIO();
-    io.Fonts->Clear();
-    io.Fonts->AddFontDefault();
-    // Merge Japanese glyphs so both Latin (default) and Japanese are available
+    if (!io.Fonts) return;
+    // Merge Japanese glyphs into the default font (already built by imguiSetup)
     ImFontConfig config;
     config.MergeMode = true;
     const char* jpFontPaths[] = {
 #ifdef __APPLE__
         "/System/Library/Fonts/Supplemental/Arial Unicode.ttf",
-        "/System/Library/Fonts/Hiragino Sans GB.ttc",  // fallback: has CJK
+        "/System/Library/Fonts/Hiragino Sans GB.ttc",
 #endif
 #ifdef _WIN32
         "C:\\Windows\\Fonts\\msgothic.ttc",
@@ -77,7 +76,7 @@ static void setupJapaneseFont() {
     };
     for (const char* path : jpFontPaths) {
         if (io.Fonts->AddFontFromFileTTF(path, 16.0f, &config, io.Fonts->GetGlyphRangesJapanese())) {
-            break;  // one success is enough when merging
+            break;
         }
     }
 }
@@ -85,11 +84,10 @@ static void setupJapaneseFont() {
 void tcApp::setup() {
     headlessMode_ = headless::isActive();
     if (!headlessMode_) {
-        // Add Japanese font before imguiSetup() so the font atlas is built with it
-        ImGuiIO& io = ImGui::GetIO();
-        setupJapaneseFont();
         imguiSetup();
+        setupJapaneseFont();
         imguiIniPath_ = getSettingsPath().replace_filename("imgui.ini").string();
+        ImGuiIO& io = ImGui::GetIO();
         io.IniFilename = imguiIniPath_.c_str();
         ImGui::LoadIniSettingsFromDisk(io.IniFilename);
     }
@@ -1039,9 +1037,12 @@ void tcApp::drawGui() {
     ImGui::Separator();
     ImGui::Text("Command Line");
     std::string cmdLine = buildCommandLine();
-    static char cmdBuffer[4096];
-    std::snprintf(cmdBuffer, sizeof(cmdBuffer), "%s", cmdLine.c_str());
-    ImGui::InputTextMultiline("##cmdline", cmdBuffer, sizeof(cmdBuffer), ImVec2(-1, 60),
+    // 長いコマンドでも途切れないよう動的バッファを使用（ImGui は null 終端を要求）
+    static std::vector<char> cmdBuffer;
+    cmdBuffer.assign(cmdLine.begin(), cmdLine.end());
+    cmdBuffer.push_back('\0');
+    float cmdLineHeight = std::min(120.0f, 20.0f + std::count(cmdLine.begin(), cmdLine.end(), '\n') * 18.0f);
+    ImGui::InputTextMultiline("##cmdline", cmdBuffer.data(), cmdBuffer.size(), ImVec2(-1, cmdLineHeight),
         ImGuiInputTextFlags_ReadOnly);
     if (ImGui::Button("Copy to Clipboard", ImVec2(180, 26))) {
         setClipboardString(cmdLine);
