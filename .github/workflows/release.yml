@@ -58,8 +58,11 @@ jobs:
             -DTRUSSC_DIR="${GITHUB_WORKSPACE}/TrussC/trussc"
 
       - name: Build
-        run: cmake --build build -j$(sysctl -n hw.logicalcpu)
-
+        run: |
+          cmake --build build -j$(sysctl -n hw.logicalcpu) 2>&1
+          echo "=== build直下のファイル ==="
+          find build -maxdepth 1
+          
       - name: Find .app bundle
         id: find-app
         run: |
@@ -207,7 +210,8 @@ jobs:
           sudo apt-get install -y build-essential cmake libgl1-mesa-dev \
             libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev \
             libgtk-3-dev \
-            libavcodec-dev libavformat-dev libswscale-dev libavutil-dev
+            libavcodec-dev libavformat-dev libswscale-dev libavutil-dev \
+            gstreamer-1.0 gstreamer-app-1.0 gstreamer-audio-1.0
 
       - name: Configure (CMake)
         run: |
