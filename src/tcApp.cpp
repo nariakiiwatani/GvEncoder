@@ -17,7 +17,7 @@
 #endif
 
 #include "tc/utils/tcJson.h"
-#include "sokol/sokol_imgui.h"
+#include "sokol/util/sokol_imgui.h"
 
 namespace fs = std::filesystem;
 
@@ -599,6 +599,11 @@ void tcApp::finishConversion(bool success) {
         }
     }
 
+    // Re-enqueue input so the user can press Run again after updating images
+    if (settings_.keepInputAfterEncode && !inputPath_.empty()) {
+        enqueueInputPath(inputPath_);
+    }
+
     inputKind_ = InputKind::None;
     inputPath_.clear();
     imagePaths_.clear();
@@ -810,6 +815,9 @@ bool tcApp::isOutputUpToDate() const {
 }
 
 void tcApp::skipCurrentAndContinueQueue() {
+    if (settings_.keepInputAfterEncode && !inputPath_.empty()) {
+        enqueueInputPath(inputPath_);
+    }
     inputKind_ = InputKind::None;
     inputPath_.clear();
     imagePaths_.clear();
@@ -958,7 +966,7 @@ void tcApp::drawGui() {
 
     if (!isConverting_) {
         if (ImGui::Button("Select Input", ImVec2(160, 28))) {
-            auto result = loadDialog("Select input (file or folder)", false);
+            auto result = loadDialog("Select input (file or folder)");
             if (result.success) {
                 fs::path selected = result.filePath;
                 std::string label = selected.filename().string();
@@ -1003,7 +1011,7 @@ void tcApp::drawGui() {
     if (!isConverting_) {
         if (ImGui::Button("Select Output", ImVec2(160, 28))) {
             string defaultName = inputPath_.empty() ? "output.gv" : resolveOutputPath().filename().string();
-            auto result = saveDialog(defaultName, "Save .gv");
+            auto result = saveDialog("Save .gv", "", "", defaultName);
             if (result.success) {
                 settings_.outputPath = result.filePath;
             }
@@ -1012,6 +1020,7 @@ void tcApp::drawGui() {
 
     ImGui::Checkbox("Delete Source After Encode", &settings_.deleteSource);
     ImGui::Checkbox("Skip if image is not updated", &settings_.skipIfUpToDate);
+    ImGui::Checkbox("Keep input after encode", &settings_.keepInputAfterEncode);
 
     ImGui::Separator();
     if (!isConverting_) {
@@ -1055,7 +1064,7 @@ void tcApp::drawGui() {
     ImGui::Begin("GV Player");
 
     if (ImGui::Button("Open GV File", ImVec2(160, 26))) {
-        auto result = loadDialog("Select .gv file", false);
+        auto result = loadDialog("Select .gv file");
         if (result.success) {
             loadGvFile(result.filePath);
         }
@@ -1145,6 +1154,7 @@ void tcApp::loadGuiSettings() {
     settings_.resizeHeight = j.value("resizeHeight", settings_.resizeHeight);
     settings_.deleteSource = j.value("deleteSource", settings_.deleteSource);
     settings_.skipIfUpToDate = j.value("skipIfUpToDate", settings_.skipIfUpToDate);
+    settings_.keepInputAfterEncode = j.value("keepInputAfterEncode", settings_.keepInputAfterEncode);
 
     string outputPath = j.value("outputPath", "");
     if (!outputPath.empty()) {
@@ -1172,6 +1182,7 @@ void tcApp::saveGuiSettings() const {
     j["resizeHeight"] = settings_.resizeHeight;
     j["deleteSource"] = settings_.deleteSource;
     j["skipIfUpToDate"] = settings_.skipIfUpToDate;
+    j["keepInputAfterEncode"] = settings_.keepInputAfterEncode;
     j["outputPath"] = settings_.outputPath.empty() ? "" : settings_.outputPath.string();
 
     std::ofstream ofs(path);

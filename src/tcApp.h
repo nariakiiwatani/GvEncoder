@@ -46,6 +46,7 @@ struct EncodeSettings {
     std::filesystem::path outputPath;
     bool deleteSource = false;
     bool skipIfUpToDate = false;  // when on, skip folder if output .gv exists and is newer than all source images
+    bool keepInputAfterEncode = false;  // when on, re-enqueue the input path after encoding so Run can be pressed again
 };
 
 class tcApp : public App {
