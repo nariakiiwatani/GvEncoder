@@ -12,6 +12,7 @@ trussc_app()
 
 # Bundle ID override for notarization/distribution
 set_target_properties(${PROJECT_NAME} PROPERTIES
+    MACOSX_BUNDLE TRUE
     MACOSX_BUNDLE_GUI_IDENTIFIER "com.annolab.GvEncoder"
 )
 
