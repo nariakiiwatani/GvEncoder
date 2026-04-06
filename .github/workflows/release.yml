@@ -62,24 +62,21 @@ jobs:
           cmake --build build -j$(sysctl -n hw.logicalcpu) 2>&1
           echo "=== build直下のファイル ==="
           find build -maxdepth 1
-          
       - name: Find .app bundle
         id: find-app
         run: |
-          echo "=== build ディレクトリの内容 ==="
-          find build -type d | head -30
+          echo "=== buildの全ファイル(CMakeFiles除く) ==="
+          find build -not -path "*/CMakeFiles/*" | head -50
 
           APP_PATH=$(find build -name "*.app" -type d | head -1)
-
           if [ -z "$APP_PATH" ]; then
             echo "ERROR: .app バンドルが見つかりませんでした"
             exit 1
           fi
-
           echo "Found: $APP_PATH"
           echo "app_path=$APP_PATH" >> "$GITHUB_OUTPUT"
           echo "app_name=$(basename "$APP_PATH" .app)" >> "$GITHUB_OUTPUT"
-          
+    
       - name: Code Sign
         run: |
           codesign --deep --force --options runtime \
@@ -211,7 +208,7 @@ jobs:
             libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev \
             libgtk-3-dev \
             libavcodec-dev libavformat-dev libswscale-dev libavutil-dev \
-            gstreamer-1.0 gstreamer-app-1.0 gstreamer-audio-1.0
+            libgstreamer-1.0 libgstreamer-app-1.0 libgstreamer-audio-1.0
 
       - name: Configure (CMake)
         run: |
