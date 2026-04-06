@@ -165,10 +165,10 @@ jobs:
           APP_NAME="GvEncoder"
           TAG="${GITHUB_REF_NAME}"
           # Find the Release output directory
-          if [ -d "build/Release" ]; then
-            DIST_DIR="build/Release"
+          if [ -d "bin/Release" ]; then
+            DIST_DIR="bin/Release"
           else
-            DIST_DIR="build"
+            DIST_DIR="bin"
           fi
           mkdir -p "$RUNNER_TEMP/package"
           cp "$DIST_DIR"/*.exe "$RUNNER_TEMP/package/" 2>/dev/null || true
@@ -229,8 +229,8 @@ jobs:
           APP_NAME="GvEncoder"
           TAG="${GITHUB_REF_NAME}"
           mkdir -p "$RUNNER_TEMP/package"
-          cp build/${APP_NAME} "$RUNNER_TEMP/package/" 2>/dev/null || \
-            find build -maxdepth 2 -type f -executable ! -name "*.cmake" -exec cp {} "$RUNNER_TEMP/package/" \;
+          cp bin/${APP_NAME} "$RUNNER_TEMP/package/" 2>/dev/null || \
+            find bin -maxdepth 2 -type f -executable ! -name "*.cmake" -exec cp {} "$RUNNER_TEMP/package/" \;
           tar -czf "$RUNNER_TEMP/${APP_NAME}-${TAG}-linux.tar.gz" \
             -C "$RUNNER_TEMP/package" .
 
