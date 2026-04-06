@@ -8,6 +8,7 @@
 #include <string>
 #include <vector>
 
+#include <stdexcept>
 #include "GpuVideo.hpp"
 #include "GpuVideoIO.hpp"
 #include "GpuVideoReader.hpp"

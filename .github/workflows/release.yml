@@ -63,10 +63,20 @@ jobs:
       - name: Find .app bundle
         id: find-app
         run: |
+          echo "=== build ディレクトリの内容 ==="
+          find build -type d | head -30
+
           APP_PATH=$(find build -name "*.app" -type d | head -1)
+
+          if [ -z "$APP_PATH" ]; then
+            echo "ERROR: .app バンドルが見つかりませんでした"
+            exit 1
+          fi
+
+          echo "Found: $APP_PATH"
           echo "app_path=$APP_PATH" >> "$GITHUB_OUTPUT"
           echo "app_name=$(basename "$APP_PATH" .app)" >> "$GITHUB_OUTPUT"
-
+          
       - name: Code Sign
         run: |
           codesign --deep --force --options runtime \
@@ -195,7 +205,8 @@ jobs:
         run: |
           sudo apt-get update
           sudo apt-get install -y build-essential cmake libgl1-mesa-dev \
-            libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev
+            libx11-dev libxrandr-dev libxinerama-dev libxcursor-dev libxi-dev \
+            libgtk-3-dev
 
       - name: Configure (CMake)
         run: |
